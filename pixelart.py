@@ -12,39 +12,15 @@ import time
 # ============================
 # Hackatime API 设置
 # ============================
-API_KEY = "你的 Hackatime API Key"
-
-last_heartbeat = 0
-
-def send_heartbeat():
-    auth = base64.b64encode((API_KEY + ":").encode()).decode()
-
-    try:
-        requests.post(
-            "https://hackatime.hackclub.com/api/heartbeats",
-            json={
-                "entity": "PygamePixelTool",
-                "project": "PixelArtProject",
-                "language": "Python",
-                "category": "design"
-            },
-            headers={
-                "Authorization": f"Basic {auth}"
-            },
-            timeout=5
-        )
-        print("[Hackatime] Heartbeat sent")
-    except Exception as e:
-        print("[Hackatime] Heartbeat failed:", e)
 
 
 # ============================
 # 配置（画布大小）
 # ============================
-CANVAS_W = 11
-CANVAS_H = 11
+CANVAS_W = 16
+CANVAS_H = 16
 PALETTE_W = 300
-BASE_PIXEL_SIZE = 56
+BASE_PIXEL_SIZE = 16
 
 pygame.init()
 
@@ -73,14 +49,17 @@ tool_changed_by_eyedropper = False
 # ============================
 # 自动编号文件名
 # ============================
-def get_unique_filename(base_name="pixel_art", ext="png"):
-    filename = f"{base_name}.{ext}"
-    i = 1
-    while os.path.exists(filename):
-        filename = f"{base_name}({i}).{ext}"
-        i += 1
-    return filename
+def get_unique_filename(base="pixel_art", ext="png", folder=None):
+    if folder is None:
+        folder = os.getcwd()
 
+    i = 0
+    while True:
+        name = f"{base}{'' if i == 0 else f'({i})'}.{ext}"
+        path = os.path.join(folder, name)
+        if not os.path.exists(path):
+            return path
+        i += 1
 
 # ============================
 # 自动布局
@@ -116,13 +95,14 @@ def enter_fullscreen():
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     is_fullscreen = True
     recalc_layout()
+    print("enter fullscreen")
 
 def exit_fullscreen():
     global screen, is_fullscreen
     screen = pygame.display.set_mode((WINDOW_W, WINDOW_H), pygame.RESIZABLE)
     is_fullscreen = False
     recalc_layout()
-
+    print("exit fullscreen")
 
 # ============================
 # 画布数据
@@ -135,6 +115,10 @@ canvas = [[None for _ in range(CANVAS_H)] for _ in range(CANVAS_W)]
 # ============================
 undo_stack = []
 redo_stack = []
+
+def get_downloads_folder():
+    return os.path.join(os.path.expanduser("~"), "Downloads")
+
 
 def push_undo():
     undo_stack.append(copy.deepcopy(canvas))
@@ -179,23 +163,27 @@ h, s, v = 0, 1, 1
 # 保存 PNG
 # ============================
 def save_png(scale=16):
-    filename = get_unique_filename("pixel_art", "png")
-    out_w = CANVAS_W * scale
-    out_h = CANVAS_H * scale
+    downloads = get_downloads_folder()
+    os.makedirs(downloads, exist_ok=True)
 
-    img = Image.new("RGBA", (out_w, out_h))
+    filename = get_unique_filename(
+        base="pixel_art",
+        ext="png",
+        folder=downloads
+    )
+
+    img = Image.new("RGBA", (CANVAS_W * scale, CANVAS_H * scale))
     px = img.load()
 
     for x in range(CANVAS_W):
         for y in range(CANVAS_H):
-            col = canvas[x][y] if canvas[x][y] else (0,0,0,0)
+            color = canvas[x][y] or (0, 0, 0, 0)
             for dx in range(scale):
                 for dy in range(scale):
-                    px[x*scale+dx, y*scale+dy] = col
+                    px[x * scale + dx, y * scale + dy] = color
 
     img.save(filename)
-    print("Saved:", filename)
-
+    print("Saved to Downloads:", filename)
 
 # ============================
 # HSV
@@ -323,11 +311,6 @@ drawing_right = False
 
 while True:
     mx, my = pygame.mouse.get_pos()
-
-    # Hackatime 心跳
-    if time.time() - last_heartbeat > 60:
-        send_heartbeat()
-        last_heartbeat = time.time()
 
     for event in pygame.event.get():
 
